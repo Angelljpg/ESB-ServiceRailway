@@ -21,7 +21,7 @@ import com.utd.ti.soa.esb_service.utils.Auth;
 @RequestMapping("/api/v1/esb")
 public class ESBClientController {
 
-    private final WebClient webClient = WebClient.create("http://localhost:3011/api/clients");
+    private final WebClient webClient = WebClient.create("https://clientsrailway-production.up.railway.app");
     private final Auth auth = new Auth();
 
     @GetMapping("/client")
