@@ -19,7 +19,7 @@ import com.utd.ti.soa.esb_service.utils.Auth;
 @RequestMapping("/api/v1/esb")
 public class ESBUserController {
 
-    private final WebClient webClient = WebClient.create("http://localhost:3010/api/users");
+    private final WebClient webClient = WebClient.create("http://usersrailway-production.up.railway.app");
     private final Auth auth = new Auth();
 
     @PostMapping("/user")
@@ -29,6 +29,11 @@ public class ESBUserController {
 
         if (!auth.validateToken(token)) {
             return ResponseEntity.status(401).body("Token Invalido");
+        }
+        
+        String userType = auth.getUserType(token);
+        if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
+            return ResponseEntity.status(403).body("Acceso denegado");
         }
 
         String response = webClient.post()

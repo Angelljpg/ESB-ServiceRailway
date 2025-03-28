@@ -54,11 +54,6 @@ public class ESBClientController {
             return ResponseEntity.status(401).body("Token Invalido");
         }
 
-        String userType = auth.getUserType(token);
-        if (userType == null || !(userType.equals("admin") || userType.equals("cliente") || userType.equals("proveedor"))) {
-            return ResponseEntity.status(403).body("Acceso denegado");
-        }
-
         String response = webClient.post()
                 .uri("/create")
                 .bodyValue(client)
