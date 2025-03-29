@@ -2,6 +2,7 @@ package com.utd.ti.soa.esb_service.controller;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -97,15 +98,15 @@ public class ESBUserController {
         return ResponseEntity.ok(response);
     }
 
-    @PatchMapping("/user/delete/{id}")
+    @DeleteMapping("/user/delete/{id}")
     public ResponseEntity<String> deactivateUser(@PathVariable String id, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         System.out.println("Token recibido: " + token);
 
         if (!auth.validateToken(token)) {
-            return ResponseEntity.status(401).body("Token Invalido");
+            return ResponseEntity.status(401).body("Token Inválido");
         }
 
-        String response = webClient.patch()
+        String response = webClient.delete()
             .uri("/api/users/delete/{id}", id)  
             .retrieve()
             .bodyToMono(String.class)
@@ -113,4 +114,6 @@ public class ESBUserController {
 
         return ResponseEntity.ok(response);
     }
+
+
 }
