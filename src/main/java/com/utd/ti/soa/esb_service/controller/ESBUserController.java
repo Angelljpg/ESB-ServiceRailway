@@ -19,7 +19,7 @@ import com.utd.ti.soa.esb_service.utils.Auth;
 @RequestMapping("/api/v1/esb")
 public class ESBUserController {
 
-    private final WebClient webClient = WebClient.create("https://usersrailway-production.up.railway.app/api/users");
+    private final WebClient webClient = WebClient.create("https://usersrailway-production.up.railway.app");
     private final Auth auth = new Auth();
 
     @PostMapping("/user")
@@ -37,7 +37,7 @@ public class ESBUserController {
         }
 
         String response = webClient.post()
-                .uri("/create")  
+                .uri("api/users/create")  
                 .bodyValue(user)
                 .retrieve()
                 .bodyToMono(String.class)
@@ -50,7 +50,7 @@ public class ESBUserController {
         System.out.println("Request Body: " + user);
 
         String response = webClient.post()
-                .uri("/login")  // Asegúrate de que la URL sea correcta
+                .uri("api/users/login")  // Asegúrate de que la URL sea correcta
                 .bodyValue(user)  // Enviar las credenciales del usuario (username y password)
                 .retrieve()
                 .bodyToMono(String.class)
@@ -72,7 +72,7 @@ public class ESBUserController {
             return ResponseEntity.status(401).body("Token Invalido");
         }
         String response = webClient.get()
-            .uri("/")
+            .uri("api/users/")
             .retrieve()
             .bodyToMono(String.class)
             .block();
@@ -89,7 +89,7 @@ public class ESBUserController {
         }
 
         String response = webClient.patch()
-            .uri("/{id}", id)  
+            .uri("api/users/{id}", id)  
             .bodyValue(user)
             .retrieve()
             .bodyToMono(String.class)
@@ -106,7 +106,7 @@ public class ESBUserController {
         }
 
         String response = webClient.patch()
-            .uri("/delete/{id}", id)  
+            .uri("api/users/delete/{id}", id)  
             .retrieve()
             .bodyToMono(String.class)
             .block();
