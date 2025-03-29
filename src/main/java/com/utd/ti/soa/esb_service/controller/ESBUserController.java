@@ -23,6 +23,7 @@ public class ESBUserController {
     private final WebClient webClient = WebClient.create("https://usersrailway-production-d953.up.railway.app");
     private final Auth auth = new Auth();
 
+    
     @PostMapping("/user")
     public ResponseEntity<String> createUser(@RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         System.out.println("Request Body: " + user);
