@@ -1,12 +1,17 @@
 package com.utd.ti.soa.esb_service.controller;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
+
 import com.utd.ti.soa.esb_service.model.User;
 import com.utd.ti.soa.esb_service.utils.Auth;
 
@@ -14,158 +19,98 @@ import com.utd.ti.soa.esb_service.utils.Auth;
 @RequestMapping("/api/v1/esb")
 public class ESBUserController {
 
-    private final WebClient webClient;
-    private final Auth auth;
-
-    public ESBUserController(
-            @Value("${USER_SERVICE_URL:https://usersrailway-definitive.up.railway.app}") String userServiceUrl,
-            @Value("${USER_SERVICE_PORT:3010}") String userServicePort,
-            Auth auth) {
-        
-        this.auth = auth;
-        String baseUrl = userServiceUrl + ":" + userServicePort + "/api/users";
-        
-        this.webClient = WebClient.builder()
-            .baseUrl(baseUrl)
-            .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
-            .defaultHeader(HttpHeaders.ACCEPT, "application/json")
-            .build();
-    }
+    private final WebClient webClient = WebClient.create("https://usersrailway-definitive.up.railway.app/api/users");
+    private final Auth auth = new Auth();
 
     @PostMapping("/user")
-    public ResponseEntity<?> createUser(@RequestBody User user, 
-                                      @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        try {
-            System.out.println("Request Body: " + user);
-            System.out.println("Token recibido: " + token);
+    public ResponseEntity<String> createUser(@RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+        System.out.println("Request Body: " + user);
+        System.out.println("Token recibido: " + token);
 
-            if (!auth.validateToken(token)) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-            }
-            
-            String userType = auth.getUserType(token);
-            if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Acceso denegado");
-            }
-
-            String response = webClient.post()
-                    .uri("/create")
-                    .header(HttpHeaders.AUTHORIZATION, token)
-                    .bodyValue(user)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            return ResponseEntity.ok(response);
-        } catch (WebClientResponseException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error interno del servidor: " + e.getMessage());
+        if (!auth.validateToken(token)) {
+            return ResponseEntity.status(401).body("Token Invalido");
         }
+        
+        String userType = auth.getUserType(token);
+        if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
+            return ResponseEntity.status(403).body("Acceso denegado");
+        }
+
+        String response = webClient.post()
+                .uri("/create")  
+                .bodyValue(user)
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/user/login")
-    public ResponseEntity<?> login(@RequestBody User user) {
-        try {
-            System.out.println("Request Body: " + user);
+    public ResponseEntity<String> login(@RequestBody User user) {
+        System.out.println("Request Body: " + user);
 
-            String response = webClient.post()
-                    .uri("/login")
-                    .bodyValue(user)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
+        String response = webClient.post()
+                .uri("/login")  // Asegúrate de que la URL sea correcta
+                .bodyValue(user)  // Enviar las credenciales del usuario (username y password)
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
 
-            if (response.contains("Usuario autenticado")) {
-                return ResponseEntity.ok(response);
-            }
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Credenciales incorrectas");
-        } catch (WebClientResponseException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error interno del servidor: " + e.getMessage());
+        if (response.contains("Usuario autenticado")) {
+            return ResponseEntity.ok(response);  // Retorna el token si el login es exitoso
+        } else {
+            return ResponseEntity.status(401).body("Credenciales incorrectas");
         }
     }
 
+
     @GetMapping("/user/all")
-    public ResponseEntity<?> getAllUsers(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        try {
-            System.out.println("Token recibido: " + token);
+    public ResponseEntity<String> getAllUsers(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+        System.out.println("Token recibido: " + token); 
 
-            if (!auth.validateToken(token)) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-            }
-
-            String response = webClient.get()
-                    .uri("/")
-                    .header(HttpHeaders.AUTHORIZATION, token)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            return ResponseEntity.ok(response);
-        } catch (WebClientResponseException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error interno del servidor: " + e.getMessage());
+        if (!auth.validateToken(token)) {
+            return ResponseEntity.status(401).body("Token Invalido");
         }
+        String response = webClient.get()
+            .uri("/")
+            .retrieve()
+            .bodyToMono(String.class)
+            .block();
+        return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/user/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable String id, 
-                                      @RequestBody User user, 
-                                      @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        try {
-            System.out.println("Request Body: " + user);
-            System.out.println("Token recibido: " + token);
+    public ResponseEntity<String> updateUser(@PathVariable String id, @RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+        System.out.println("Request Body: " + user);
+        System.out.println("Token recibido: " + token);
 
-            if (!auth.validateToken(token)) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-            }
-
-            String response = webClient.patch()
-                    .uri("/{id}", id)
-                    .header(HttpHeaders.AUTHORIZATION, token)
-                    .bodyValue(user)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            return ResponseEntity.ok(response);
-        } catch (WebClientResponseException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error interno del servidor: " + e.getMessage());
+        if (!auth.validateToken(token)) {
+            return ResponseEntity.status(401).body("Token Invalido");
         }
+
+        String response = webClient.patch()
+            .uri("/{id}", id)  
+            .bodyValue(user)
+            .retrieve()
+            .bodyToMono(String.class)
+            .block();
+        return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/user/delete/{id}")
-    public ResponseEntity<?> deactivateUser(@PathVariable String id, 
-                                          @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        try {
-            System.out.println("Token recibido: " + token);
+    public ResponseEntity<String> deactivateUser(@PathVariable String id, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+        System.out.println("Token recibido: " + token);
 
-            if (!auth.validateToken(token)) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-            }
-
-            String response = webClient.patch()
-                    .uri("/delete/{id}", id)
-                    .header(HttpHeaders.AUTHORIZATION, token)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-
-            return ResponseEntity.ok(response);
-        } catch (WebClientResponseException e) {
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error interno del servidor: " + e.getMessage());
+        if (!auth.validateToken(token)) {
+            return ResponseEntity.status(401).body("Token Invalido");
         }
-    }
 
-    @GetMapping("/health")
-    public ResponseEntity<String> healthCheck() {
-        return ResponseEntity.ok("ESB Service is running");
+        String response = webClient.patch()
+            .uri("/delete/{id}", id)  
+            .retrieve()
+            .bodyToMono(String.class)
+            .block();
+
+        return ResponseEntity.ok(response);
     }
 }

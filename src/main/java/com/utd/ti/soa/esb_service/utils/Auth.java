@@ -4,13 +4,10 @@ import java.nio.charset.StandardCharsets;
 
 import javax.crypto.SecretKey;
 
-import org.springframework.stereotype.Component;
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
-@Component
 public class Auth {
     private final String SECRET_KEY = "aJksd9QzPl+sVdK7vYc/L4dK8HgQmPpQ5K9yApUsj3w=";
 
