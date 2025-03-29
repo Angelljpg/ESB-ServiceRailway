@@ -12,7 +12,7 @@ import com.utd.ti.soa.esb_service.utils.Auth;
 @RequestMapping("/api/v1/esb")
 public class ESBProductController {
 
-    private final WebClient webClient = WebClient.create("http://productsrailway.railway.internal/api/products");
+    private final WebClient webClient = WebClient.create("productsrailway.railway.internal/api/products");
     private final Auth auth = new Auth();
 
     // Obtener todos los productos
