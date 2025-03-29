@@ -20,7 +20,7 @@ import com.utd.ti.soa.esb_service.utils.Auth;
 @RequestMapping("/api/v1/esb")
 public class ESBUserController {
 
-    private final WebClient webClient = WebClient.create("https://usersrailway.railway.internal:3010");
+    private final WebClient webClient = WebClient.create("https://usersrailway-production-d953.up.railway.app");
     private final Auth auth = new Auth();
 
     @PostMapping("/user")
