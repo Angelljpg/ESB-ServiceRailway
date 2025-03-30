@@ -38,13 +38,18 @@ public class ESBUserController {
             return ResponseEntity.status(403).body("Acceso denegado");
         }
 
-        String response = webClient.post()
-                .uri("http://usersrailway.railway.internal:3010/api/users/create")  
-                .bodyValue(user)
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
-        return ResponseEntity.ok(response);
+        try {
+            String response = webClient.post()
+                    .uri("http://usersrailway.railway.internal:3010/api/users/create")
+                    .bodyValue(user)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error al comunicarse con el servicio de usuarios: " + e.getMessage());
+        }
     }
 
     @PostMapping("/user/login")
