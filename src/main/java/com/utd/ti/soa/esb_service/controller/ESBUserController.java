@@ -2,144 +2,176 @@ package com.utd.ti.soa.esb_service.controller;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import org.springframework.http.MediaType;
-
 import com.utd.ti.soa.esb_service.model.User;
 import com.utd.ti.soa.esb_service.utils.Auth;
-
 import reactor.core.publisher.Mono;
+import java.util.function.Supplier;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/esb")
 public class ESBUserController {
 
-    private final WebClient webClient = WebClient.create();
-    private final Auth auth = new Auth();
+    private final WebClient webClient;
+    private final Auth auth;
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 1000;
 
+    public ESBUserController() {
+        this.webClient = WebClient.builder()
+            .baseUrl("https://usersrailway-production.up.railway.app")
+            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+            .build();
+        this.auth = new Auth();
+    }
 
     @PostMapping("/user")
-    public ResponseEntity<String> createUser(@RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        System.out.println("Request Body: " + user);
-        System.out.println("Token recibido: " + token);
-
-        // Validar token
+    public ResponseEntity<String> createUser(@RequestBody User user, 
+                                           @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+        log.info("Creando usuario: {}", user.getUsername());
+        
         if (!auth.validateToken(token)) {
+            log.warn("Token inválido recibido");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
         }
-
-        // Obtener tipo de usuario
+        
         String userType = auth.getUserType(token);
         if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
+            log.warn("Intento de acceso no autorizado con tipo: {}", userType);
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Acceso denegado");
         }
 
-        try {
-            String response = webClient.post()
-                .uri("http://usersrailway.railway.internal:3010/api/users/create")
-                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .bodyValue(user)
-                .retrieve()
-                .onStatus(HttpStatus::isError, clientResponse -> {
-                    return clientResponse.bodyToMono(String.class)
-                        .flatMap(errorBody -> {
-                            System.err.println("Error en la respuesta: " + errorBody); // Corregido System.err.println
-                            return Mono.error(new RuntimeException("Error en la solicitud: " + errorBody));
-                        });
-                })
-                .bodyToMono(String.class)
-                .block();
-                return ResponseEntity.ok(response);
-
-
-        } catch (WebClientResponseException e) {
-            System.err.println("Error en la respuesta del servidor: " + e.getResponseBodyAsString());
-            return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
-        } catch (Exception e) {
-            System.err.println("Error desconocido: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error en el servidor");
-        }
+        return executeWithRetry(
+            () -> webClient.post()
+                .uri("/api/users/create")
+                .header(HttpHeaders.AUTHORIZATION, token)
+                .bodyValue(user),
+            MAX_RETRIES
+        );
     }
 
     @PostMapping("/user/login")
     public ResponseEntity<String> login(@RequestBody User user) {
-        System.out.println("Request Body: " + user);
-
-        String response = webClient.post()
-                .uri("http://usersrailway.railway.internal:3010/api/users/login")  // Asegúrate de que la URL sea correcta
-                .bodyValue(user)  // Enviar las credenciales del usuario (username y password)
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
-
-        if (response.contains("Usuario autenticado")) {
-            return ResponseEntity.ok(response);  // Retorna el token si el login es exitoso
-        } else {
-            return ResponseEntity.status(401).body("Credenciales incorrectas");
-        }
+        log.info("Intento de login para usuario: {}", user.getUsername());
+        
+        return executeWithRetry(
+            () -> webClient.post()
+                .uri("/api/users/login")
+                .bodyValue(user),
+            MAX_RETRIES
+        );
     }
-
 
     @GetMapping("/user/all")
     public ResponseEntity<String> getAllUsers(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        System.out.println("Token recibido: " + token); 
-
+        log.info("Solicitando todos los usuarios");
+        
         if (!auth.validateToken(token)) {
-            return ResponseEntity.status(401).body("Token Invalido");
+            log.warn("Token inválido para listar usuarios");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Invalido");
         }
-        String response = webClient.get()
-            .uri("http://usersrailway.railway.internal:3010/api/users/")
-            .retrieve()
-            .bodyToMono(String.class)
-            .block();
-        return ResponseEntity.ok(response);
+        
+        return executeWithRetry(
+            () -> webClient.get()
+                .uri("/api/users/")
+                .header(HttpHeaders.AUTHORIZATION, token),
+            MAX_RETRIES
+        );
     }
 
     @PatchMapping("/user/{id}")
-    public ResponseEntity<String> updateUser(@PathVariable String id, @RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        System.out.println("Request Body: " + user);
-        System.out.println("Token recibido: " + token);
-
+    public ResponseEntity<String> updateUser(@PathVariable String id, 
+                                           @RequestBody User user,
+                                           @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+        log.info("Actualizando usuario ID: {}", id);
+        
         if (!auth.validateToken(token)) {
-            return ResponseEntity.status(401).body("Token Invalido");
+            log.warn("Token inválido para actualización");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Invalido");
         }
-
-        String response = webClient.patch()
-            .uri("http://usersrailway.railway.internal:3010/api/users/{id}", id)  
-            .bodyValue(user)
-            .retrieve()
-            .bodyToMono(String.class)
-            .block();
-        return ResponseEntity.ok(response);
+        
+        return executeWithRetry(
+            () -> webClient.patch()
+                .uri("/api/users/{id}", id)
+                .header(HttpHeaders.AUTHORIZATION, token)
+                .bodyValue(user),
+            MAX_RETRIES
+        );
     }
 
     @DeleteMapping("/user/delete/{id}")
-    public ResponseEntity<String> deactivateUser(@PathVariable String id, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        System.out.println("Token recibido: " + token);
-
+    public ResponseEntity<String> deactivateUser(@PathVariable String id,
+                                               @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+        log.info("Eliminando usuario ID: {}", id);
+        
         if (!auth.validateToken(token)) {
-            return ResponseEntity.status(401).body("Token Inválido");
+            log.warn("Token inválido para eliminación");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
         }
-
-        String response = webClient.delete()
-            .uri("http://usersrailway.railway.internal:3010/api/users/delete/{id}", id)  
-            .retrieve()
-            .bodyToMono(String.class)
-            .block();
-
-        return ResponseEntity.ok(response);
+        
+        return executeWithRetry(
+            () -> webClient.delete()
+                .uri("/api/users/delete/{id}", id)
+                .header(HttpHeaders.AUTHORIZATION, token),
+            MAX_RETRIES
+        );
     }
 
+    /**
+     * Método genérico para ejecutar peticiones con reintentos
+     */
+    private ResponseEntity<String> executeWithRetry(Supplier<WebClient.RequestHeadersSpec<?>> requestSupplier, 
+                                                int maxRetries) {
+        // Usamos un array para poder modificar el valor dentro de la lambda
+        final int[] attemptCount = {0};
+        
+        while (true) {
+            attemptCount[0]++;
+            try {
+                String response = requestSupplier.get()
+                    .retrieve()
+                    .onStatus(HttpStatus::is5xxServerError, clientResponse -> {
+                        if (clientResponse.statusCode() == HttpStatus.BAD_GATEWAY && attemptCount[0] < maxRetries) {
+                            log.warn("Intento {} - Error 502, reintentando...", attemptCount[0]);
+                            return Mono.empty();
+                        }
+                        return clientResponse.bodyToMono(String.class)
+                            .flatMap(errorBody -> Mono.error(new WebClientResponseException(
+                                clientResponse.statusCode().value(),
+                                "Error del servicio",
+                                clientResponse.headers().asHttpHeaders(),
+                                errorBody.getBytes(),
+                                null)));
+                    })
+                    .bodyToMono(String.class)
+                    .block();
 
+                log.info("Petición exitosa después de {} intentos", attemptCount[0]);
+                return ResponseEntity.ok(response);
+
+            } catch (WebClientResponseException e) {
+                if (e.getStatusCode() != HttpStatus.BAD_GATEWAY || attemptCount[0] >= maxRetries) {
+                    log.error("Error del cliente HTTP: {}", e.getStatusCode());
+                    return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+                }
+                // Espera antes de reintentar (backoff exponencial)
+                try {
+                    Thread.sleep(RETRY_DELAY_MS * (long) Math.pow(2, attemptCount[0] - 1));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error durante el reintento");
+                }
+            } catch (Exception e) {
+                log.error("Error inesperado", e);
+                return ResponseEntity.internalServerError().body("Error interno del servidor");
+            }
+        }
+    }
 }
