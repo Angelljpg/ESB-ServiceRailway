@@ -24,7 +24,7 @@ public class ESBUserController {
     private final Auth auth = new Auth();
 
 
-    @PostMapping("/user/create")
+    @PostMapping("/user")
     public ResponseEntity<String> createUser(@RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         System.out.println("Request Body: " + user);
         System.out.println("Token recibido: " + token);
@@ -38,18 +38,13 @@ public class ESBUserController {
             return ResponseEntity.status(403).body("Acceso denegado");
         }
 
-        try {
-            String response = webClient.post()
-                    .uri("http://usersrailway.railway.internal:3010/api/users/create")
-                    .bodyValue(user)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body("Error al comunicarse con el servicio de usuarios: " + e.getMessage());
-        }
+        String response = webClient.post()
+                .uri("http://usersrailway.railway.internal:3010/api/users/create")  
+                .bodyValue(user)
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/user/login")
