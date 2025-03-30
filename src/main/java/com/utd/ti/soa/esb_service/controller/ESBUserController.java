@@ -46,23 +46,23 @@ public class ESBUserController {
         }
 
         try {
-            // Convertir `user` a JSON para ver qué se está enviando
+            // Convertir `user` a JSON para depuración
             ObjectMapper objectMapper = new ObjectMapper();
             String jsonUser = objectMapper.writeValueAsString(user);
             System.out.println("JSON enviado: " + jsonUser);
-
-            // Enviar solicitud al servicio de usuarios
+        
+            // Enviar solicitud
             String response = webClient.post()
                     .uri("http://usersrailway.railway.internal:3010/api/users/create")
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                    .header(HttpHeaders.AUTHORIZATION, token) // Incluir token si es necesario
+                    .header(HttpHeaders.AUTHORIZATION, token)
                     .bodyValue(user)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block(); 
-
+        
             return ResponseEntity.ok(response);
-
+        
         } catch (JsonProcessingException e) {
             e.printStackTrace();
             return ResponseEntity.status(500).body("Error al procesar JSON");
