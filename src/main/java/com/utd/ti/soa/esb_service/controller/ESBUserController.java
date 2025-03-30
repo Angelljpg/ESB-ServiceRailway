@@ -24,7 +24,7 @@ public class ESBUserController {
     private final Auth auth = new Auth();
 
 
-    @PostMapping("/user")
+    @PostMapping("/user/create")
     public ResponseEntity<String> createUser(@RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         System.out.println("Request Body: " + user);
         System.out.println("Token recibido: " + token);
