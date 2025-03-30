@@ -12,7 +12,11 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.http.MediaType;
 
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.utd.ti.soa.esb_service.model.User;
 import com.utd.ti.soa.esb_service.utils.Auth;
 
@@ -24,31 +28,47 @@ public class ESBUserController {
     private final Auth auth = new Auth();
 
 
-    @PostMapping("/user")
-    public ResponseEntity<String> createUser(@RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+@PostMapping("/user")
+    public ResponseEntity<String> createUser(@RequestBody User user, 
+                                             @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         System.out.println("Request Body: " + user);
         System.out.println("Token recibido: " + token);
 
+        // Validar token
         if (!auth.validateToken(token)) {
-            return ResponseEntity.status(401).body("Token Invalido");
+            return ResponseEntity.status(401).body("Token Inválido");
         }
-        
+
+        // Validar tipo de usuario
         String userType = auth.getUserType(token);
         if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
             return ResponseEntity.status(403).body("Acceso denegado");
         }
 
         try {
+            // Convertir `user` a JSON para ver qué se está enviando
+            ObjectMapper objectMapper = new ObjectMapper();
+            String jsonUser = objectMapper.writeValueAsString(user);
+            System.out.println("JSON enviado: " + jsonUser);
+
+            // Enviar solicitud al servicio de usuarios
             String response = webClient.post()
                     .uri("http://usersrailway.railway.internal:3010/api/users/create")
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .header(HttpHeaders.AUTHORIZATION, token) // Incluir token si es necesario
                     .bodyValue(user)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(); 
+
             return ResponseEntity.ok(response);
+
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error al procesar JSON");
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body("Error al comunicarse con el servicio de usuarios: " + e.getMessage());
+            return ResponseEntity.status(500).body("Error al comunicarse con el servicio de usuarios");
         }
     }
 
