@@ -39,7 +39,7 @@ public class ESBUserController {
         }
 
         String response = webClient.post()
-                .uri("http://usersrailway.railway.internal:3010/api/users/create")  
+                .uri("https://usersrailway-production.up.railway.app/api/users/create")  
                 .bodyValue(user)
                 .retrieve()
                 .bodyToMono(String.class)
@@ -52,7 +52,7 @@ public class ESBUserController {
         System.out.println("Request Body: " + user);
 
         String response = webClient.post()
-                .uri("http://usersrailway.railway.internal:3010/api/users/login")  // Asegúrate de que la URL sea correcta
+                .uri("https://usersrailway-production.up.railway.app/api/users/login")  // Asegúrate de que la URL sea correcta
                 .bodyValue(user)  // Enviar las credenciales del usuario (username y password)
                 .retrieve()
                 .bodyToMono(String.class)
@@ -74,7 +74,7 @@ public class ESBUserController {
             return ResponseEntity.status(401).body("Token Invalido");
         }
         String response = webClient.get()
-            .uri("http://usersrailway.railway.internal:3010/api/users/")
+            .uri("https://usersrailway-production.up.railway.app/api/users/")
             .retrieve()
             .bodyToMono(String.class)
             .block();
@@ -91,7 +91,7 @@ public class ESBUserController {
         }
 
         String response = webClient.patch()
-            .uri("http://usersrailway.railway.internal:3010/api/users/{id}", id)  
+            .uri("https://usersrailway-production.up.railway.app/api/users/{id}", id)  
             .bodyValue(user)
             .retrieve()
             .bodyToMono(String.class)
@@ -108,7 +108,7 @@ public class ESBUserController {
         }
 
         String response = webClient.delete()
-            .uri("http://usersrailway.railway.internal:3010/api/users/delete/{id}", id)  
+            .uri("https://usersrailway-production.up.railway.app/api/users/delete/{id}", id)  
             .retrieve()
             .bodyToMono(String.class)
             .block();
