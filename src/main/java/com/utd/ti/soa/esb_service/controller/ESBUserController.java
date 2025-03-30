@@ -16,6 +16,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import com.utd.ti.soa.esb_service.model.User;
 import com.utd.ti.soa.esb_service.utils.Auth;
 
+import reactor.core.publisher.Mono;
+
 @RestController
 @RequestMapping("/api/v1/esb")
 public class ESBUserController {
@@ -23,28 +25,29 @@ public class ESBUserController {
     private final WebClient webClient = WebClient.create();
     private final Auth auth = new Auth();
 
-
     @PostMapping("/user")
-    public ResponseEntity<String> createUser(@RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+    public Mono<ResponseEntity<String>> createUser(@RequestBody User user, @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         System.out.println("Request Body: " + user);
         System.out.println("Token recibido: " + token);
 
-        if (!auth.validateToken(token)) {
-            return ResponseEntity.status(401).body("Token Invalido");
-        }
-        
-        String userType = auth.getUserType(token);
-        if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
-            return ResponseEntity.status(403).body("Acceso denegado");
-        }
+        return Mono.fromCallable(() -> auth.validateToken(token))
+            .flatMap(isValid -> {
+                if (!isValid) {
+                    return Mono.just(ResponseEntity.status(401).body("Token Invalido"));
+                }
+                
+                String userType = auth.getUserType(token);
+                if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
+                    return Mono.just(ResponseEntity.status(403).body("Acceso denegado"));
+                }
 
-        String response = webClient.post()
-                .uri("http://usersrailway.railway.internal:3010/api/users/create")  
-                .bodyValue(user)
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
-        return ResponseEntity.ok(response);
+                return webClient.post()
+                    .uri("http://usersrailway.railway.internal:3010/api/users/create")  
+                    .bodyValue(user)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .map(response -> ResponseEntity.ok(response));
+            });
     }
 
     @PostMapping("/user/login")
