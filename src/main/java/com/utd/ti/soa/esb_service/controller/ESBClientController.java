@@ -25,7 +25,7 @@ public class ESBClientController {
 
     public ESBClientController() {
         this.webClient = WebClient.builder()
-            .baseUrl("http://clientsrailway.railway.internal:3011")
+            .baseUrl("https://clientsrailway-production.up.railway.app")
             .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
             .build();
         this.auth = new Auth();
