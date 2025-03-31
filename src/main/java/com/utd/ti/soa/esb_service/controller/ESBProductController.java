@@ -11,8 +11,6 @@ import com.utd.ti.soa.esb_service.model.Product;
 import com.utd.ti.soa.esb_service.utils.Auth;
 import reactor.core.publisher.Mono;
 
-import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -57,50 +55,40 @@ public class ESBProductController {
             MAX_RETRIES
         );
     }
-
     @PostMapping("/products/create")
-    public ResponseEntity<String> createProduct(@RequestBody Map<String, Object> productData, 
-                                            @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+    public ResponseEntity<String> createProduct(@RequestBody Map<String, Object> productRequest, 
+                                              @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         try {
-            log.info("Creando producto con datos: {}", productData);
-            
             // Validación de token y rol
             if (!auth.validateToken(token)) {
-                log.warn("Token inválido para creación de producto");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
             }
             
-            String userType = auth.getUserType(token);
-            if (userType == null || !userType.equals("admin")) {
-                log.warn("Intento de creación de producto no autorizado con tipo: {}", userType);
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo administradores pueden crear productos");
+            // Verificar campos obligatorios antes de enviar
+            if (productRequest.get("ProductName") == null || 
+                productRequest.get("UnitPrice") == null ||
+                productRequest.get("Stock") == null ||
+                productRequest.get("CategoryID") == null) {
+                return ResponseEntity.badRequest().body("Faltan campos obligatorios");
             }
-
-            // Construir el cuerpo manualmente
-            Map<String, Object> requestBody = new LinkedHashMap<>();
-            requestBody.put("ProductName", productData.get("ProductName"));
-            requestBody.put("UnitPrice", productData.get("UnitPrice"));
-            requestBody.put("Stock", productData.get("Stock"));
-            requestBody.put("CategoryID", productData.get("CategoryID"));
-
-            log.debug("Cuerpo final a enviar: {}", requestBody);
-
+    
+            // Loggear el cuerpo que se enviará
+            log.info("Enviando producto: {}", productRequest);
+    
             return executeWithRetry(
                 () -> webClient.post()
                     .uri("/create")
                     .header(HttpHeaders.AUTHORIZATION, token)
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
-                    .acceptCharset(StandardCharsets.UTF_8)
-                    .bodyValue(requestBody),
+                    .bodyValue(productRequest),
                 MAX_RETRIES
             );
         } catch (Exception e) {
-            log.error("Error inesperado al procesar la solicitud", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Error interno al procesar la solicitud");
+            log.error("Error al procesar solicitud", e);
+            return ResponseEntity.internalServerError().body("Error interno");
         }
-}
+    }
 
     @PatchMapping("/products/update/{id}")
     public ResponseEntity<String> updateProduct(@PathVariable String id, 
