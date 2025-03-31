@@ -10,6 +10,9 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import com.utd.ti.soa.esb_service.model.Product;
 import com.utd.ti.soa.esb_service.utils.Auth;
 import reactor.core.publisher.Mono;
+
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
@@ -56,9 +59,10 @@ public class ESBProductController {
 
     @PostMapping("/products/create")
     public ResponseEntity<String> createProduct(@RequestBody Product product, 
-                                              @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+                                            @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Creando producto: {}", product.getProductName());
         
+        // Validación de token y rol
         if (!auth.validateToken(token)) {
             log.warn("Token inválido para creación de producto");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
@@ -70,11 +74,21 @@ public class ESBProductController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo administradores pueden crear productos");
         }
 
+        // Crear un mapa manual con los campos requeridos
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("ProductName", product.getProductName());
+        requestBody.put("UnitPrice", product.getUnitPrice());
+        requestBody.put("Stock", product.getStock());
+        requestBody.put("CategoryID", product.getCategoryID());
+
+        log.debug("Cuerpo de la solicitud: {}", requestBody);
+
         return executeWithRetry(
             () -> webClient.post()
                 .uri("/create")
                 .header(HttpHeaders.AUTHORIZATION, token)
-                .bodyValue(product),
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody),
             MAX_RETRIES
         );
     }
