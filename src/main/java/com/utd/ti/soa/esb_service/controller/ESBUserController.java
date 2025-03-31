@@ -85,7 +85,7 @@ public class ESBUserController {
         );
     }
 
-    @PatchMapping("/user/{id}")
+    @PatchMapping("/user/update/{id}")
     public ResponseEntity<String> updateUser(@PathVariable String id, 
                                            @RequestBody User user,
                                            @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
