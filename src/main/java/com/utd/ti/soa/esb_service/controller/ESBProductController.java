@@ -11,7 +11,8 @@ import com.utd.ti.soa.esb_service.model.Product;
 import com.utd.ti.soa.esb_service.utils.Auth;
 import reactor.core.publisher.Mono;
 
-import java.util.HashMap;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -58,40 +59,48 @@ public class ESBProductController {
     }
 
     @PostMapping("/products/create")
-    public ResponseEntity<String> createProduct(@RequestBody Product product, 
+    public ResponseEntity<String> createProduct(@RequestBody Map<String, Object> productData, 
                                             @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        log.info("Creando producto: {}", product.getProductName());
-        
-        // Validación de token y rol
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para creación de producto");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
+        try {
+            log.info("Creando producto con datos: {}", productData);
+            
+            // Validación de token y rol
+            if (!auth.validateToken(token)) {
+                log.warn("Token inválido para creación de producto");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
+            }
+            
+            String userType = auth.getUserType(token);
+            if (userType == null || !userType.equals("admin")) {
+                log.warn("Intento de creación de producto no autorizado con tipo: {}", userType);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo administradores pueden crear productos");
+            }
+
+            // Construir el cuerpo manualmente
+            Map<String, Object> requestBody = new LinkedHashMap<>();
+            requestBody.put("ProductName", productData.get("ProductName"));
+            requestBody.put("UnitPrice", productData.get("UnitPrice"));
+            requestBody.put("Stock", productData.get("Stock"));
+            requestBody.put("CategoryID", productData.get("CategoryID"));
+
+            log.debug("Cuerpo final a enviar: {}", requestBody);
+
+            return executeWithRetry(
+                () -> webClient.post()
+                    .uri("/create")
+                    .header(HttpHeaders.AUTHORIZATION, token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .acceptCharset(StandardCharsets.UTF_8)
+                    .bodyValue(requestBody),
+                MAX_RETRIES
+            );
+        } catch (Exception e) {
+            log.error("Error inesperado al procesar la solicitud", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error interno al procesar la solicitud");
         }
-        
-        String userType = auth.getUserType(token);
-        if (userType == null || !userType.equals("admin")) {
-            log.warn("Intento de creación de producto no autorizado con tipo: {}", userType);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo administradores pueden crear productos");
-        }
-
-        // Crear un mapa manual con los campos requeridos
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("ProductName", product.getProductName());
-        requestBody.put("UnitPrice", product.getUnitPrice());
-        requestBody.put("Stock", product.getStock());
-        requestBody.put("CategoryID", product.getCategoryID());
-
-        log.debug("Cuerpo de la solicitud: {}", requestBody);
-
-        return executeWithRetry(
-            () -> webClient.post()
-                .uri("/create")
-                .header(HttpHeaders.AUTHORIZATION, token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(requestBody),
-            MAX_RETRIES
-        );
-    }
+}
 
     @PatchMapping("/products/update/{id}")
     public ResponseEntity<String> updateProduct(@PathVariable String id, 
