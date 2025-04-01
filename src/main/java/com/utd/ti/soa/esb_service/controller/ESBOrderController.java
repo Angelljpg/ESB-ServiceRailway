@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/esb")
+@RequestMapping("/api/v1/esb/orders") 
 public class ESBOrderController {
 
     private final WebClient webClient;
@@ -32,35 +32,28 @@ public class ESBOrderController {
         this.auth = new Auth();
     }
 
-    @PostMapping("/order/create")
+    @PostMapping
     public ResponseEntity<String> createOrder(@RequestBody Map<String, Object> orderRequest,
                                             @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Creando nueva orden");
         
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para creación de orden");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-        }
+        // Validación mejorada del token
+        ResponseEntity<String> tokenValidation = validateTokenAndRole(token, "admin|client");
+        if (tokenValidation != null) return tokenValidation;
         
-        // Validar campos obligatorios
-        if (orderRequest.get("ClientID") == null || 
-            orderRequest.get("ProductID") == null ||
-            orderRequest.get("PurchasedQuantity") == null ||
-            orderRequest.get("DeliveryAddress") == null ||
-            orderRequest.get("ContactMethod") == null ||
-            orderRequest.get("PaymentMethod") == null) {
-            return ResponseEntity.badRequest().body("Faltan campos obligatorios");
-        }
+        // Validación de campos mejorada
+        String[] requiredFields = {"ClientID", "ProductID", "PurchasedQuantity", 
+                                 "DeliveryAddress", "ContactMethod", "PaymentMethod"};
+        ResponseEntity<String> fieldValidation = validateRequiredFields(orderRequest, requiredFields);
+        if (fieldValidation != null) return fieldValidation;
 
-        // Validar método de pago
-        String paymentMethod = orderRequest.get("PaymentMethod").toString();
-        if (!paymentMethod.equals("CASH") && !paymentMethod.equals("DEBIT_CARD") && !paymentMethod.equals("CREDIT_CARD")) {
-            return ResponseEntity.badRequest().body("Método de pago inválido");
+        // Validación de método de pago
+        if (!validatePaymentMethod(orderRequest.get("PaymentMethod").toString())) {
+            return ResponseEntity.badRequest().body("Método de pago inválido. Use: CASH, DEBIT_CARD o CREDIT_CARD");
         }
 
         return executeWithRetry(
             () -> webClient.post()
-                .uri("/create")
                 .header(HttpHeaders.AUTHORIZATION, token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(orderRequest),
@@ -68,32 +61,27 @@ public class ESBOrderController {
         );
     }
 
-    @GetMapping("/order")
+    @GetMapping
     public ResponseEntity<String> getAllOrders(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Obteniendo todas las órdenes");
         
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para listar órdenes");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-        }
+        ResponseEntity<String> tokenValidation = validateTokenAndRole(token, "admin|client|provider");
+        if (tokenValidation != null) return tokenValidation;
         
         return executeWithRetry(
             () -> webClient.get()
-                .uri("/")
                 .header(HttpHeaders.AUTHORIZATION, token),
             MAX_RETRIES
         );
     }
 
-    @GetMapping("/order/{id}")
+    @GetMapping("/{id}")
     public ResponseEntity<String> getOrderById(@PathVariable String id,
                                              @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Obteniendo orden con ID: {}", id);
         
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para obtener orden");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-        }
+        ResponseEntity<String> tokenValidation = validateTokenAndRole(token, "admin|client");
+        if (tokenValidation != null) return tokenValidation;
         
         return executeWithRetry(
             () -> webClient.get()
@@ -103,23 +91,18 @@ public class ESBOrderController {
         );
     }
 
-    @PutMapping("/order/update/{id}")
+    @PutMapping("/{id}")
     public ResponseEntity<String> updateOrder(@PathVariable String id,
                                             @RequestBody Map<String, Object> orderUpdates,
                                             @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Actualizando orden con ID: {}", id);
         
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para actualizar orden");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-        }
+        ResponseEntity<String> tokenValidation = validateTokenAndRole(token, "admin");
+        if (tokenValidation != null) return tokenValidation;
         
-        // Validar método de pago si está presente
-        if (orderUpdates.get("PaymentMethod") != null) {
-            String paymentMethod = orderUpdates.get("PaymentMethod").toString();
-            if (!paymentMethod.equals("CASH") && !paymentMethod.equals("DEBIT_CARD") && !paymentMethod.equals("CREDIT_CARD")) {
-                return ResponseEntity.badRequest().body("Método de pago inválido");
-            }
+        if (orderUpdates.get("PaymentMethod") != null && 
+            !validatePaymentMethod(orderUpdates.get("PaymentMethod").toString())) {
+            return ResponseEntity.badRequest().body("Método de pago inválido");
         }
 
         return executeWithRetry(
@@ -131,27 +114,55 @@ public class ESBOrderController {
         );
     }
 
-    @DeleteMapping("/order/delete/{id}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<String> deactivateOrder(@PathVariable String id,
                                                 @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Desactivando orden con ID: {}", id);
         
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para desactivar orden");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-        }
+        ResponseEntity<String> tokenValidation = validateTokenAndRole(token, "admin");
+        if (tokenValidation != null) return tokenValidation;
         
         return executeWithRetry(
             () -> webClient.delete()
-                .uri("/delete/{id}", id)
+                .uri("/{id}", id)
                 .header(HttpHeaders.AUTHORIZATION, token),
             MAX_RETRIES
         );
     }
 
-    /**
-     * Método genérico para ejecutar peticiones con reintentos
-     */
+    // Métodos auxiliares mejorados
+    private ResponseEntity<String> validateTokenAndRole(String token, String allowedRoles) {
+        if (!auth.validateToken(token)) {
+            log.warn("Token inválido");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
+        }
+        
+        String userType = auth.getUserType(token);
+        if (userType == null || !userType.matches(allowedRoles)) {
+            log.warn("Acceso no autorizado para tipo de usuario: {}", userType);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Acceso denegado");
+        }
+        return null;
+    }
+
+    private ResponseEntity<String> validateRequiredFields(Map<String, Object> request, String[] fields) {
+        for (String field : fields) {
+            if (request.get(field) == null) {
+                log.warn("Campo obligatorio faltante: {}", field);
+                return ResponseEntity.badRequest()
+                    .body(String.format("Campo obligatorio faltante: %s", field));
+            }
+        }
+        return null;
+    }
+
+    private boolean validatePaymentMethod(String method) {
+        return method != null && 
+               (method.equals("CASH") || 
+                method.equals("DEBIT_CARD") || 
+                method.equals("CREDIT_CARD"));
+    }
+
     private ResponseEntity<String> executeWithRetry(Supplier<WebClient.RequestHeadersSpec<?>> requestSupplier, 
                                                  int maxRetries) {
         final int[] attemptCount = {0};
@@ -161,24 +172,16 @@ public class ESBOrderController {
             try {
                 String response = requestSupplier.get()
                     .retrieve()
-                    .onStatus(HttpStatus::is5xxServerError, clientResponse -> {
+                    .onStatus(HttpStatus::isError, clientResponse -> {
                         if (clientResponse.statusCode() == HttpStatus.BAD_GATEWAY && attemptCount[0] < maxRetries) {
-                            log.warn("Intento {} - Error 502, reintentando...", attemptCount[0]);
+                            log.warn("Intento {} - Error {}, reintentando...", 
+                                    attemptCount[0], clientResponse.statusCode());
                             return Mono.empty();
                         }
                         return clientResponse.bodyToMono(String.class)
                             .flatMap(errorBody -> Mono.error(new WebClientResponseException(
                                 clientResponse.statusCode().value(),
                                 "Error del servicio",
-                                clientResponse.headers().asHttpHeaders(),
-                                errorBody.getBytes(),
-                                null)));
-                    })
-                    .onStatus(HttpStatus::is4xxClientError, clientResponse -> {
-                        return clientResponse.bodyToMono(String.class)
-                            .flatMap(errorBody -> Mono.error(new WebClientResponseException(
-                                clientResponse.statusCode().value(),
-                                "Error del cliente",
                                 clientResponse.headers().asHttpHeaders(),
                                 errorBody.getBytes(),
                                 null)));
@@ -190,15 +193,11 @@ public class ESBOrderController {
                 return ResponseEntity.ok(response);
 
             } catch (WebClientResponseException e) {
-                if (e.getStatusCode() != HttpStatus.BAD_GATEWAY || attemptCount[0] >= maxRetries) {
-                    log.error("Error del cliente HTTP ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
-                    
-                    if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
-                        return ResponseEntity.status(e.getStatusCode())
-                            .body("Error en la solicitud: " + e.getResponseBodyAsString());
-                    }
-                    
-                    return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
+                log.error("Error en la respuesta: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
+                if (attemptCount[0] >= maxRetries || 
+                    e.getStatusCode() != HttpStatus.BAD_GATEWAY) {
+                    return ResponseEntity.status(e.getStatusCode())
+                        .body(e.getResponseBodyAsString());
                 }
                 
                 try {
@@ -212,7 +211,8 @@ public class ESBOrderController {
                 }
             } catch (Exception e) {
                 log.error("Error inesperado", e);
-                return ResponseEntity.internalServerError().body("Error interno del servidor");
+                return ResponseEntity.internalServerError()
+                    .body("Error interno del servidor: " + e.getMessage());
             }
         }
     }
