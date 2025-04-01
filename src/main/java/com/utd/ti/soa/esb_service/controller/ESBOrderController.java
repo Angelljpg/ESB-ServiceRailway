@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/esb/orders")
+@RequestMapping("/api/v1/esb")
 public class ESBOrderController {
 
     private final WebClient webClient;
@@ -32,7 +32,7 @@ public class ESBOrderController {
         this.auth = new Auth();
     }
 
-    @PostMapping("/create")
+    @PostMapping("/order/create")
     public ResponseEntity<String> createOrder(@RequestBody Map<String, Object> orderRequest,
                                             @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Creando nueva orden");
@@ -68,7 +68,7 @@ public class ESBOrderController {
         );
     }
 
-    @GetMapping("/")
+    @GetMapping("/order")
     public ResponseEntity<String> getAllOrders(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Obteniendo todas las órdenes");
         
@@ -85,7 +85,7 @@ public class ESBOrderController {
         );
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/order/{id}")
     public ResponseEntity<String> getOrderById(@PathVariable String id,
                                              @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Obteniendo orden con ID: {}", id);
@@ -103,7 +103,7 @@ public class ESBOrderController {
         );
     }
 
-    @PutMapping("/update/{id}")
+    @PutMapping("/order/update/{id}")
     public ResponseEntity<String> updateOrder(@PathVariable String id,
                                             @RequestBody Map<String, Object> orderUpdates,
                                             @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
@@ -131,7 +131,7 @@ public class ESBOrderController {
         );
     }
 
-    @DeleteMapping("/delete/{id}")
+    @DeleteMapping("/order/delete/{id}")
     public ResponseEntity<String> deactivateOrder(@PathVariable String id,
                                                 @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Desactivando orden con ID: {}", id);
