@@ -45,4 +45,21 @@ public class Auth {
             return null;
         }
     }
+
+    public String getUserId(String token) {
+        try {
+            SecretKey key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+
+            Claims claims = Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token.replace("Bearer ", ""))
+                .getBody();
+
+            return claims.get("userId", String.class); // Extrae el userId del token
+        } catch (Exception e) {
+            System.out.println("Error al extraer userId del token: " + e.getMessage());
+            return null;
+        }
+    }
 }
