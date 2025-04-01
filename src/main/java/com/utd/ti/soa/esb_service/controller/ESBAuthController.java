@@ -64,7 +64,7 @@ public class ESBAuthController {
         }
     }
 
-    @PutMapping("/reset-password/{token}")
+    @PostMapping("/reset-password/{token}")
     public ResponseEntity<Map<String, Object>> resetPassword(
             @PathVariable String token,
             @RequestBody Map<String, String> request) {
