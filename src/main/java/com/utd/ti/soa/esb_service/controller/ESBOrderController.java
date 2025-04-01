@@ -54,6 +54,7 @@ public class ESBOrderController {
 
         return executeWithRetry(
             () -> webClient.post()
+                .uri("/create")
                 .header(HttpHeaders.AUTHORIZATION, token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(orderRequest),
