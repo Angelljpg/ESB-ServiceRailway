@@ -27,7 +27,7 @@ public class ESBAuthController {
 
     public ESBAuthController() {
         this.webClient = WebClient.builder()
-            .baseUrl("https://usersrailway-production.up.railway.app/api/users")
+            .baseUrl("https://usersrailway-production.up.railway.app")
             .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
             .build();
         this.auth = new Auth();
@@ -86,7 +86,7 @@ public class ESBAuthController {
 
             ResponseEntity<String> response = executeWithRetry(
                 () -> webClient.post()
-                    .uri("/newpass/{token}", token)
+                    .uri("api/users/newpass/{token}", token)
                     .bodyValue(request),
                 MAX_RETRIES
             );
