@@ -26,7 +26,7 @@ public class ESBOrderController {
 
     public ESBOrderController() {
         this.webClient = WebClient.builder()
-            .baseUrl("https://orders-service-production.up.railway.app/api/orders")
+            .baseUrl("https://ordersrailway-production.up.railway.app/api/orders")
             .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
             .build();
         this.auth = new Auth();
