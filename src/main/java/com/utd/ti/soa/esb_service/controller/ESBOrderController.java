@@ -125,7 +125,7 @@ public class ESBOrderController {
         
         return executeWithRetry(
             () -> webClient.delete()
-                .uri("/{id}", id)
+                .uri("/delete/{id}", id)
                 .header(HttpHeaders.AUTHORIZATION, token),
             MAX_RETRIES
         );
