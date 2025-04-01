@@ -12,6 +12,7 @@ import com.utd.ti.soa.esb_service.utils.Auth;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
+import java.util.HashMap;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,115 +35,172 @@ public class ESBProductController {
     }
 
     @GetMapping("/products")
-    public ResponseEntity<String> getAllProducts(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+    public ResponseEntity<Map<String, Object>> getAllProducts(
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Solicitando todos los productos");
         
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para listar productos");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-        }
-        
-        String userType = auth.getUserType(token);
-        if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
-            log.warn("Intento de acceso no autorizado con tipo: {}", userType);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Acceso denegado");
-        }
-
-        return executeWithRetry(
-            () -> webClient.get()
-                .uri("/")
-                .header(HttpHeaders.AUTHORIZATION, token),
-            MAX_RETRIES
-        );
-    }
-    @PostMapping("/products/create")
-    public ResponseEntity<String> createProduct(@RequestBody Map<String, Object> productRequest, 
-                                              @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         try {
-            // Validación de token y rol
             if (!auth.validateToken(token)) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
+                log.warn("Token inválido para listar productos");
+                return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Token Inválido", "AUTH001");
             }
             
-            // Verificar campos obligatorios antes de enviar
+            // Todos los roles pueden ver productos
+            String userType = auth.getUserType(token);
+            if (userType == null || !(userType.equals("admin") || userType.equals("client") || userType.equals("provider"))) {
+                log.warn("Tipo de usuario no válido: {}", userType);
+                return buildErrorResponse(HttpStatus.FORBIDDEN, "Tipo de usuario no válido", "AUTH002");
+            }
+
+            ResponseEntity<String> response = executeWithRetry(
+                () -> webClient.get()
+                    .uri("/")
+                    .header(HttpHeaders.AUTHORIZATION, token),
+                MAX_RETRIES
+            );
+
+            return ResponseEntity.status(response.getStatusCode())
+                .body(buildSuccessResponse(response.getBody()));
+
+        } catch (Exception e) {
+            log.error("Error al obtener productos: {}", e.getMessage());
+            return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Error al recuperar productos", "SRV001");
+        }
+    }
+
+    @PostMapping("/products/create")
+    public ResponseEntity<Map<String, Object>> createProduct(
+            @RequestBody Map<String, Object> productRequest,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+        log.info("Creando nuevo producto");
+        
+        try {
+            if (!auth.validateToken(token)) {
+                log.warn("Token inválido para creación de producto");
+                return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Token Inválido", "AUTH001");
+            }
+            
+            String userType = auth.getUserType(token);
+            // Solo admin y provider pueden crear productos
+            if (!userType.equals("admin") && !userType.equals("provider")) {
+                log.warn("Intento de creación no autorizado por tipo: {}", userType);
+                return buildErrorResponse(HttpStatus.FORBIDDEN, 
+                    "No tiene permisos para crear productos", "AUTH003");
+            }
+
+            // Validación de campos obligatorios
             if (productRequest.get("ProductName") == null || 
                 productRequest.get("UnitPrice") == null ||
                 productRequest.get("Stock") == null ||
                 productRequest.get("CategoryID") == null) {
-                return ResponseEntity.badRequest().body("Faltan campos obligatorios");
+                return buildErrorResponse(HttpStatus.BAD_REQUEST, 
+                    "Faltan campos obligatorios", "VAL001");
             }
-    
-            // Loggear el cuerpo que se enviará
-            log.info("Enviando producto: {}", productRequest);
-    
-            return executeWithRetry(
+
+            // Validación de tipos de datos
+            try {
+                Double.parseDouble(productRequest.get("UnitPrice").toString());
+                Integer.parseInt(productRequest.get("Stock").toString());
+            } catch (NumberFormatException e) {
+                return buildErrorResponse(HttpStatus.BAD_REQUEST, 
+                    "Precio o Stock con formato inválido", "VAL002");
+            }
+
+            ResponseEntity<String> response = executeWithRetry(
                 () -> webClient.post()
                     .uri("/create")
                     .header(HttpHeaders.AUTHORIZATION, token)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
                     .bodyValue(productRequest),
                 MAX_RETRIES
             );
+
+            return ResponseEntity.status(response.getStatusCode())
+                .body(buildSuccessResponse(response.getBody()));
+
         } catch (Exception e) {
-            log.error("Error al procesar solicitud", e);
-            return ResponseEntity.internalServerError().body("Error interno");
+            log.error("Error al crear producto: {}", e.getMessage());
+            return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Error al crear producto", "SRV002");
         }
     }
 
     @PatchMapping("/products/update/{id}")
-    public ResponseEntity<String> updateProduct(@PathVariable String id, 
-                                              @RequestBody Product product,
-                                              @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+    public ResponseEntity<Map<String, Object>> updateProduct(
+            @PathVariable String id,
+            @RequestBody Product product,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Actualizando producto ID: {}", id);
         
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para actualización de producto");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-        }
-        
-        String userType = auth.getUserType(token);
-        if (userType == null || !userType.equals("admin")) {
-            log.warn("Intento de actualización de producto no autorizado con tipo: {}", userType);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo administradores pueden actualizar productos");
-        }
+        try {
+            if (!auth.validateToken(token)) {
+                log.warn("Token inválido para actualización de producto");
+                return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Token Inválido", "AUTH001");
+            }
+            
+            String userType = auth.getUserType(token);
+            // Solo admin y provider pueden actualizar productos
+            if (!userType.equals("admin") && !userType.equals("provider")) {
+                log.warn("Intento de actualización no autorizado por tipo: {}", userType);
+                return buildErrorResponse(HttpStatus.FORBIDDEN, 
+                    "No tiene permisos para actualizar productos", "AUTH004");
+            }
 
-        return executeWithRetry(
-            () -> webClient.patch()
-                .uri("/{id}", id)
-                .header(HttpHeaders.AUTHORIZATION, token)
-                .bodyValue(product),
-            MAX_RETRIES
-        );
+            ResponseEntity<String> response = executeWithRetry(
+                () -> webClient.patch()
+                    .uri("/{id}", id)
+                    .header(HttpHeaders.AUTHORIZATION, token)
+                    .bodyValue(product),
+                MAX_RETRIES
+            );
+
+            return ResponseEntity.status(response.getStatusCode())
+                .body(buildSuccessResponse(response.getBody()));
+
+        } catch (Exception e) {
+            log.error("Error al actualizar producto: {}", e.getMessage());
+            return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Error al actualizar producto", "SRV003");
+        }
     }
 
     @DeleteMapping("/products/delete/{id}")
-    public ResponseEntity<String> deleteProduct(@PathVariable String id,
-                                              @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
+    public ResponseEntity<Map<String, Object>> deleteProduct(
+            @PathVariable String id,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         log.info("Eliminando producto ID: {}", id);
         
-        if (!auth.validateToken(token)) {
-            log.warn("Token inválido para eliminación de producto");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token Inválido");
-        }
-        
-        String userType = auth.getUserType(token);
-        if (userType == null || !userType.equals("admin")) {
-            log.warn("Intento de eliminación de producto no autorizado con tipo: {}", userType);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Solo administradores pueden eliminar productos");
-        }
+        try {
+            if (!auth.validateToken(token)) {
+                log.warn("Token inválido para eliminación de producto");
+                return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Token Inválido", "AUTH001");
+            }
+            
+            // Solo admin puede eliminar productos
+            if (!auth.getUserType(token).equals("admin")) {
+                log.warn("Intento de eliminación no autorizado");
+                return buildErrorResponse(HttpStatus.FORBIDDEN, 
+                    "Solo administradores pueden eliminar productos", "AUTH005");
+            }
 
-        return executeWithRetry(
-            () -> webClient.delete()
-                .uri("/{id}", id)
-                .header(HttpHeaders.AUTHORIZATION, token),
-            MAX_RETRIES
-        );
+            ResponseEntity<String> response = executeWithRetry(
+                () -> webClient.delete()
+                    .uri("/{id}", id)
+                    .header(HttpHeaders.AUTHORIZATION, token),
+                MAX_RETRIES
+            );
+
+            return ResponseEntity.status(response.getStatusCode())
+                .body(buildSuccessResponse(response.getBody()));
+
+        } catch (Exception e) {
+            log.error("Error al eliminar producto: {}", e.getMessage());
+            return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Error al eliminar producto", "SRV004");
+        }
     }
 
-    /**
-     * Método genérico para ejecutar peticiones con reintentos
-     */
     private ResponseEntity<String> executeWithRetry(Supplier<WebClient.RequestHeadersSpec<?>> requestSupplier, 
                                                  int maxRetries) {
         final int[] attemptCount = {0};
@@ -165,15 +223,6 @@ public class ESBProductController {
                                 errorBody.getBytes(),
                                 null)));
                     })
-                    .onStatus(HttpStatus::is4xxClientError, clientResponse -> {
-                        return clientResponse.bodyToMono(String.class)
-                            .flatMap(errorBody -> Mono.error(new WebClientResponseException(
-                                clientResponse.statusCode().value(),
-                                "Error del cliente",
-                                clientResponse.headers().asHttpHeaders(),
-                                errorBody.getBytes(),
-                                null)));
-                    })
                     .bodyToMono(String.class)
                     .block();
 
@@ -182,22 +231,12 @@ public class ESBProductController {
 
             } catch (WebClientResponseException e) {
                 if (e.getStatusCode() != HttpStatus.BAD_GATEWAY || attemptCount[0] >= maxRetries) {
-                    log.error("Error del cliente HTTP ({}): {}", e.getStatusCode(), e.getResponseBodyAsString());
-                    
-                    // Manejar específicamente errores 400 con más detalle
-                    if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
-                        return ResponseEntity.status(e.getStatusCode())
-                            .body("Error en la solicitud: " + e.getResponseBodyAsString());
-                    }
-                    
+                    log.error("Error del cliente HTTP: {}", e.getStatusCode());
                     return ResponseEntity.status(e.getStatusCode()).body(e.getResponseBodyAsString());
                 }
                 
-                // Espera antes de reintentar (backoff exponencial)
                 try {
-                    long delay = RETRY_DELAY_MS * (long) Math.pow(2, attemptCount[0] - 1);
-                    log.warn("Reintentando en {} ms...", delay);
-                    Thread.sleep(delay);
+                    Thread.sleep(RETRY_DELAY_MS * (long) Math.pow(2, attemptCount[0] - 1));
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -208,5 +247,25 @@ public class ESBProductController {
                 return ResponseEntity.internalServerError().body("Error interno del servidor");
             }
         }
+    }
+
+    private Map<String, Object> buildSuccessResponse(String data) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("data", data);
+        return response;
+    }
+
+    private ResponseEntity<Map<String, Object>> buildErrorResponse(HttpStatus status, String message, String code) {
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("success", false);
+        errorResponse.put("error", message);
+        errorResponse.put("code", code);
+        
+        if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
+            errorResponse.put("errorDetails", "Consulte con el administrador del sistema");
+        }
+        
+        return ResponseEntity.status(status).body(errorResponse);
     }
 }
