@@ -48,7 +48,7 @@ public class ESBAuthController {
 
             ResponseEntity<String> response = executeWithRetry(
                 () -> webClient.post()
-                    .uri("/password-token")
+                    .uri("/pass")
                     .header(HttpHeaders.AUTHORIZATION, token)
                     .bodyValue(request),
                 MAX_RETRIES
@@ -86,7 +86,7 @@ public class ESBAuthController {
 
             ResponseEntity<String> response = executeWithRetry(
                 () -> webClient.post()
-                    .uri("/reset-password/{token}", token)
+                    .uri("/newpass/{token}", token)
                     .bodyValue(request),
                 MAX_RETRIES
             );
