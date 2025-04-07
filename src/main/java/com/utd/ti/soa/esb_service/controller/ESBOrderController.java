@@ -101,6 +101,14 @@ public class ESBOrderController {
         ResponseEntity<String> tokenValidation = validateTokenAndRole(token, "admin");
         if (tokenValidation != null) return tokenValidation;
         
+        if (orderUpdates.containsKey("ClientID")) {
+            return ResponseEntity.badRequest().body("El ClientID no puede ser modificado una vez creada la orden.");
+        }
+        
+        if (orderUpdates.containsKey("ProductID")) {
+            return ResponseEntity.badRequest().body("El ProductID no puede ser modificado una vez creada la orden.");
+        }
+
         if (orderUpdates.get("PaymentMethod") != null && 
             !validatePaymentMethod(orderUpdates.get("PaymentMethod").toString())) {
             return ResponseEntity.badRequest().body("Método de pago inválido");
